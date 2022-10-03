@@ -1,0 +1,1 @@
+export type PromiseMethod = (value: any) => void
