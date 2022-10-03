@@ -5,6 +5,8 @@ import { ConnectionI } from "./interfaces/connection";
 import { DNS_ADDRESS, DNS_PORT, SPLITTER } from "./config";
 import { createPromise } from "./helpers/promise";
 import { ClientPromise } from "./interfaces/client-promise";
+import { RequestData } from "./interfaces/request-data";
+import ServiceConnection from "./service-connection";
 
 export default class Connection implements ConnectionI {
   private readonly promises: { [key: string]: ClientPromise } = {};
@@ -36,7 +38,9 @@ export default class Connection implements ConnectionI {
     client.connect(DNS_PORT, DNS_ADDRESS, () => {
       const { address, port } = client.address() as AddressInfo;
       if (!address || !port) {
-        reject(`[MIDDLEWARE] ERROR: ${address}:${port} is not a valid address.`);
+        reject(
+          `[MIDDLEWARE] ERROR: ${address}:${port} is not a valid address.`
+        );
       }
       const fullAddress = `${address}:${port}`;
       const connection: Connection = new Connection(
@@ -52,12 +56,12 @@ export default class Connection implements ConnectionI {
     return promise;
   }
 
-  request(serviceName: string): Promise<Object | string> {
+  request(serviceName: string, data: RequestData): Promise<Object | string> {
     const dnsGetData = {
       operation: "get",
       serviceName: serviceName,
     };
-    return this.send(dnsGetData);
+    return this.send(dnsGetData, data);
   }
 
   register(serviceName: string): Promise<Object | string> {
@@ -84,14 +88,36 @@ export default class Connection implements ConnectionI {
 
     stream.on("data", (res: string) => {
       const response = JSON.parse(res);
-      Object.keys(this.promises).forEach((requestId) => {
+      Object.keys(this.promises).forEach(async (requestId) => {
         if (requestId === response.id) {
           console.info(
             "[MIDDLEWARE - Client handler] INFO: of request: - " + requestId
           );
 
-          // TODO: pegar address (data) e realizar requisição ao serviço
-          // retornar a response do serviço ao client
+          // TODO: replace 'data' with address in name server
+          if (response.data) {
+
+            // TODO: pegar address (data) e realizar requisição ao serviço
+            // retornar a response do serviço ao client
+
+            const [ADDRESS, PORT] = response.data.split(":");
+            const serviceConnection = await ServiceConnection.create(
+              ADDRESS,
+              PORT
+            );
+            const requestData = this.promises[requestId].requestData;
+            if (requestData) {
+              const serviceResponse = await serviceConnection.makeRequest(
+                requestData
+              );
+              this.promises[requestId].resolve(serviceResponse);
+              delete this.promises[requestId];
+              return; // necessary?
+            } else {
+              // TODO: check error message
+              this.promises[requestId].reject("No request data provided to service request.");
+            }
+          }
 
           this.promises[requestId].resolve(response.data || response.message);
           delete this.promises[requestId];
@@ -102,7 +128,9 @@ export default class Connection implements ConnectionI {
     this.client.on("error", (error: any) => {
       // TODO: testar para confirmar lógica
       if (error.code === "ECONNRESET") {
-        console.error("[MIDDLEWARE - Client handler] ERROR: DNS Server unavailable");
+        console.error(
+          "[MIDDLEWARE - Client handler] ERROR: DNS Server unavailable"
+        );
         this.client.destroy();
       } else {
         console.error("[MIDDLEWARE - Client handler] ERROR: " + error.message);
@@ -117,7 +145,7 @@ export default class Connection implements ConnectionI {
     });
   }
 
-  send(messageData: Object): Promise<Object | string> {
+  send(messageData: Object, requestData?: Object): Promise<Object | string> {
     const [resolve, reject, promise] = createPromise();
 
     if (!this.alive) {
@@ -130,7 +158,11 @@ export default class Connection implements ConnectionI {
       const id = uuidv4();
       const message = this.createMessage(messageData, id);
       this.client.write(message);
-      this.promises[id] = { resolve, reject };
+      this.promises[id] = {
+        resolve,
+        reject,
+        requestData,
+      };
     } catch (error: any) {
       this.client.destroy();
       reject(error.message);
