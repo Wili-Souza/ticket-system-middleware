@@ -5,49 +5,71 @@ import { createPromise } from "./helpers/promise";
 import Controller from "./controller";
 
 export default class Service {
-  private readonly serverConnection;
+  private readonly server;
 
   private constructor(serverConnection: net.Server) {
-    this.serverConnection = serverConnection;
+    this.server = serverConnection;
   }
 
   static create(port: number = 8080, serviceName: string): Promise<Service> {
     const [resolve, reject, promise] = createPromise();
-    const serverConnection = net.createServer();
+    const server = net.createServer();
 
-    serverConnection.listen(port, async () => {
-      const registered = await Service.registerService(serviceName, port);
-      if (!registered) {
-        serverConnection.close();
+    server.listen(port, async () => {
+      const dnsConnection = await Service.registerService(serviceName, port);
+      if (!dnsConnection) {
+        server.close();
         reject("[SERVICE] Error: Failed to register service in name server.");
+        return;
       }
-      // console.info(`[SERVICE] INFO: Running service on port ${port}`);
-      const server = new Service(serverConnection);
-      resolve(server);
+
+      server.on("close", () => {
+        dnsConnection.remove();
+        console.info("[SERVICE] - Service closed.");
+      });
+
+      const service = new Service(server);
+      resolve(service);
     });
 
-    serverConnection.on("error", (error) => {
+    server.on("error", (error) => {
       reject(error.message);
     });
 
     return promise;
   }
 
+  private static async registerService(
+    serviceName: string,
+    port: number
+  ): Promise<Controller | undefined> {
+    try {
+      const nameServerConnection = await Controller.create({
+        port: port,
+      });
+      await nameServerConnection.register(serviceName);
+      return nameServerConnection;
+    } catch {
+      return;
+    }
+  }
+
   setOnData(onDataFunction: (data: Object) => any) {
-    this.serverConnection.on("connection", (client) => {
+    this.server.on("connection", (client) => {
       const stream = client.pipe(split());
 
       stream.on("data", (clientData) => {
-
+        console.log(client.readable);
+        
         if (!client.readable) {
-          return
+          return;
         }
 
-        let dataObj = {}
+        let dataObj = {};
         try {
           dataObj = JSON.parse(clientData as string);
         } catch {
-          return
+          return;
         }
 
         const result = onDataFunction(dataObj);
@@ -55,21 +77,6 @@ export default class Service {
         client.write(resultMessage + SPLITTER);
       });
     });
-  }
-
-  private static async registerService(
-    serviceName: string,
-    port: number
-  ): Promise<boolean> {
-    try {
-      const nameServerConnection = await Controller.create({
-        port: port,
-      });
-      await nameServerConnection.register(serviceName);
-      return true;
-    } catch {
-      return false;
-    }
   }
 }
 

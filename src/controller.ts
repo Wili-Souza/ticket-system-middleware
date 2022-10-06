@@ -116,7 +116,7 @@ export default class Controller implements ControllerI {
 
     stream.on("data", (res: string) => {
       // TODO: replace 'data' with address in name server
-      const { id, data: serviceAddress, message } = JSON.parse(res);
+      const { id, serviceAddress, message } = JSON.parse(res);
       const promise = this.promises[id];
 
       if (!promise) {
