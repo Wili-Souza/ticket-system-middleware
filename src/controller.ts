@@ -1,14 +1,14 @@
 import net, { AddressInfo } from "net";
 import split from "split";
 import { v4 as uuidv4 } from "uuid";
-import { ConnectionI } from "./interfaces/connection";
+import { ControllerI } from "./interfaces/controller";
 import { DNS_ADDRESS, DNS_PORT, SPLITTER } from "./config";
 import { createPromise } from "./helpers/promise";
 import { ClientPromise } from "./interfaces/client-promise";
 import { RequestData } from "./interfaces/request-data";
-import ServiceConnection from "./service-connection";
+import ServiceConnection from "./helpers/service-connection";
 
-export default class Connection implements ConnectionI {
+export default class Controller implements ControllerI {
   private readonly promises: { [key: string]: ClientPromise } = {};
   private readonly address: string;
   private readonly client: net.Socket;
@@ -23,34 +23,37 @@ export default class Connection implements ConnectionI {
     this.address = address;
     this.client = client;
     keepAlive ? this.initKeepAlive(keepAliveInterval) : null;
-    this.initClientEvents();
+    this.setOnDataEvent();
   }
 
-  // Returns a promise for connection
-  static async create(
-    keepAlive: boolean = true,
-    keepAliveInterval: number = 10
-  ): Promise<Connection> {
+  // Returns a promise for controller
+  static async create(options?: {
+    keepAlive?: boolean;
+    keepAliveInterval?: number;
+    port?: number;
+  }): Promise<Controller> {
     const [resolve, reject, promise] = createPromise();
 
     const client: net.Socket = new net.Socket();
 
+    Controller.initClientBasicEvents(client);
+
     client.connect(DNS_PORT, DNS_ADDRESS, () => {
       const { address, port } = client.address() as AddressInfo;
-      if (!address || !port) {
+      if (!address || (!options?.port && !port)) {
         reject(
           `[MIDDLEWARE] ERROR: ${address}:${port} is not a valid address.`
         );
       }
-      const fullAddress = `${address}:${port}`;
-      const connection: Connection = new Connection(
+      const fullAddress = `${address}:${options?.port || port}`;
+      const controller: Controller = new Controller(
         fullAddress,
         client,
-        keepAlive,
-        keepAliveInterval
+        options?.keepAlive || false,
+        options?.keepAliveInterval || 10
       );
       console.info("[MIDDLEWARE] INFO: connected on address: " + fullAddress);
-      resolve(connection);
+      resolve(controller);
     });
 
     return promise;
@@ -83,65 +86,72 @@ export default class Connection implements ConnectionI {
     return this.send(dnsRemoveData);
   }
 
-  private initClientEvents() {
-    const stream = this.client.pipe(split());
-
-    stream.on("data", (res: string) => {
-      const response = JSON.parse(res);
-      Object.keys(this.promises).forEach(async (requestId) => {
-        if (requestId === response.id) {
-          console.info(
-            "[MIDDLEWARE - Client handler] INFO: of request: - " + requestId
-          );
-
-          // TODO: replace 'data' with address in name server
-          if (response.data) {
-
-            // TODO: pegar address (data) e realizar requisição ao serviço
-            // retornar a response do serviço ao client
-
-            const [ADDRESS, PORT] = response.data.split(":");
-            const serviceConnection = await ServiceConnection.create(
-              ADDRESS,
-              PORT
-            );
-            const requestData = this.promises[requestId].requestData;
-            if (requestData) {
-              const serviceResponse = await serviceConnection.makeRequest(
-                requestData
-              );
-              this.promises[requestId].resolve(serviceResponse);
-              delete this.promises[requestId];
-              return; // necessary?
-            } else {
-              // TODO: check error message
-              this.promises[requestId].reject("No request data provided to service request.");
-            }
-          }
-
-          this.promises[requestId].resolve(response.data || response.message);
-          delete this.promises[requestId];
-        }
-      });
-    });
-
-    this.client.on("error", (error: any) => {
+  private static initClientBasicEvents(client: net.Socket) {
+    client.on("error", (error: any) => {
       // TODO: testar para confirmar lógica
-      if (error.code === "ECONNRESET") {
+      if (error.code === "ECONNREFUSED") {
         console.error(
           "[MIDDLEWARE - Client handler] ERROR: DNS Server unavailable"
         );
-        this.client.destroy();
+        client.destroy();
       } else {
         console.error("[MIDDLEWARE - Client handler] ERROR: " + error.message);
-        this.client.destroy();
+        client.destroy();
       }
     });
 
-    this.client.on("close", () => {
+    client.on("close", () => {
       console.info(
         "[MIDDLEWARE - Client handler] INFO: client connection closed."
       );
+    });
+  }
+
+  // private findPromiseById(id: string): ClientPromise  {
+  //   Object.keys(this.promises).find( requestId => requestId === id);
+  // }
+
+  private setOnDataEvent() {
+    const stream = this.client.pipe(split());
+
+    stream.on("data", (res: string) => {
+      // TODO: replace 'data' with address in name server
+      const { id, data: serviceAddress, message } = JSON.parse(res);
+      const promise = this.promises[id];
+
+      if (!promise) {
+        return;
+      }
+
+      const { resolve, reject, requestData } = this.promises[id];
+
+      if (serviceAddress && !requestData) {
+        reject("No requestData provided to service request.");
+        return;
+      }
+
+      if (serviceAddress) {
+        const [ADDRESS, PORT] = serviceAddress.split(":");
+        console.log(
+          "[MIDDLEWARE] got address from name server: ",
+          ADDRESS,
+          PORT
+        );
+
+        ServiceConnection.create(ADDRESS, PORT)
+          .then(async (connection) => {
+            const serviceResponse = await connection.makeRequest(requestData);
+            connection.finish();
+            resolve(serviceResponse);
+            delete this.promises[id];
+          })
+          .catch(() => {
+            reject("Service connection failed.");
+          });
+      } else {
+        resolve(serviceAddress || message);
+        delete this.promises[id];
+      }
     });
   }
 

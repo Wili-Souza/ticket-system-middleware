@@ -4,9 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon",
-    "dns-test": "ts-node ./src/test/client.ts"
+    "test": "ts-node ./src/test/test.ts"
   },
   "author": "",
   "license": "ISC",
