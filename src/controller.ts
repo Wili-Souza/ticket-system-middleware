@@ -59,7 +59,7 @@ export default class Controller implements ControllerI {
     return promise;
   }
 
-  request(serviceName: string, data: RequestData): Promise<Object | string> {
+  request(serviceName: string, data: Object): Promise<Object | string> {
     const dnsGetData = {
       operation: "get",
       serviceName: serviceName,
