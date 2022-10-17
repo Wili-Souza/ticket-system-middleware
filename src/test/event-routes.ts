@@ -1,115 +1,81 @@
 import { createPromise } from "../helpers/promise";
 
+const METHODS = [
+  {
+    method: "post",
+    path: "event",
+    data: {
+      name: "Evento legal",
+      type: "show",
+      local: "barramas",
+      ticketPrice: 45.6,
+      ticketQuantity: 100,
+      date: "34-23-6543",
+    },
+  },
+  {
+    method: "getAll",
+    path: "event",
+    data: {},
+  },
+];
+
+const DEPENDENCY_METHODS = (id: string = "test") => [
+  {
+    method: "get",
+    path: "event",
+    data: {
+      id: id,
+    },
+  },
+  {
+    method: "update",
+    path: "event",
+    data: {
+      id: id,
+      name: "Evento mais ou menos",
+      type: "show",
+      local: "barramas",
+      ticketPrice: 45.6,
+      ticketQuantity: 100,
+      date: "34-23-6543",
+    },
+  },
+  {
+    method: "delete",
+    path: "event",
+    data: {
+      id: id,
+    },
+  },
+];
+
+const validate = (result: any, method: string): boolean => {
+  if (result.status !== "success") {
+    console.log(`--- [${method} Event]: error`);
+    return false;
+  }
+  console.log(`--- [${method} Event]: passed`);
+  return true;
+};
+
 export const testAllEventRoutes = async (
   ticketServiceTest: (data: Object) => any
 ) => {
   const [resolve, reject, promise] = createPromise();
+  const allMethods = [...METHODS, ...DEPENDENCY_METHODS()];
 
-  try {
-    const postData = {
-      method: "post",
-      path: "event",
-      data: {
-        name: "Evento legal",
-        type: "show",
-        local: "barramas",
-        ticketPrice: 45.6,
-        ticketQuantity: 100,
-        date: "34-23-6543",
-      },
-    };
-
-    const created = await ticketServiceTest(postData);
-
-    if (created.status === "success") {
-      console.log("[EVENT | POST]: PASSED");
-    } else {
-        console.log(created);
-        
-      reject("[EVENT | POST]: ERROR");
-      return;
+  allMethods.forEach(async (data, index) => {
+    const result = await ticketServiceTest(data);
+    const method = data.method.toUpperCase();
+    const valid = validate(result, method);
+    if (!valid) {
+      reject(result);
     }
-
-    const getAllData = {
-      method: "getAll",
-      path: "event",
-      data: {},
-    };
-
-    const gotAll = await ticketServiceTest(getAllData);
-
-    if (gotAll.status === "success") {
-      console.log("[EVENT | GET ALL]: PASSED");
-    } else {
-      reject("[EVENT | GET ALL]: ERROR");
-      return;
+    if (index + 1 === allMethods.length) {
+      resolve("success");
     }
-
-    const id = gotAll.data[0].id;
-
-    const getData = {
-      method: "get",
-      path: "event",
-      data: {
-        id: id,
-      },
-    };
-
-    const gotOne = await ticketServiceTest(getData);
-
-    if (gotOne.status === "success") {
-      console.log("[EVENT | GET ONE]: PASSED");
-    } else {
-      reject("[EVENT | GET ONE]: ERROR");
-      return;
-    }
-
-    const updateData = {
-      method: "update",
-      path: "event",
-      data: {
-        id: id,
-        name: "Evento mais ou menos",
-        type: "show",
-        local: "barramas",
-        ticketPrice: 45.6,
-        ticketQuantity: 100,
-        date: "34-23-6543",
-      },
-    };
-
-    try {
-      const updated = await ticketServiceTest(updateData);
-      if (updated.status === "success") {
-        console.log("[EVENT | UPDATE]: PASSED");
-      } else {
-        console.log("[EVENT | UPDATE]: DID NOT PASS: ", updated);
-      }
-    } catch (error) {
-      reject(error);
-    }
-
-    const deleteData = {
-      method: "delete",
-      path: "event",
-      data: {
-        id: id,
-      },
-    };
-
-    const deleted = await ticketServiceTest(deleteData);
-
-    if (deleted.status === "success") {
-      console.log("[EVENT | DELETE]: PASSED");
-    } else {
-      reject("[EVENT | DELETE ]: ERROR");
-      return;
-    }
-  } catch (error) {
-    reject(error);
-  }
-
-  resolve("success");
+  });
 
   return promise;
 };
