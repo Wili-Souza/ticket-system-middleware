@@ -1,34 +1,33 @@
 import Controller from "../controller";
+import { createPromise } from "../helpers/promise";
 import Service from "../service";
+import { testAllEventRoutes } from "./event-routes";
+import { testAllOrderRoutes } from "./order-routes";
 
 const TEST_SERVICE_PORT = 5080;
 
-const ticketServiceTest = async (requestData: any) => {// start a connection with service
+const ticketServiceTest = async (requestData: any): Promise<any> => {
+  const [resolve, reject, promise] = createPromise();
+
+  // start a connection with service
   console.info("[TEST] Creating client...");
   const clientConstroller = await Controller.create();
 
   console.info("[TEST] Making request to service...");
   clientConstroller
     .request("ticketService", requestData)
-    .then((data: Object) => {
-      console.info(`[CLIENT] INFO: GOT`, data);
-    })
-    .catch((error: Object) => {
-      console.error(`[CLIENT] ERROR: DID NOT GET - ${error}`);
-    });
-}
+    .then((data: Object) => resolve(data))
+    .catch((error: Object) => reject(`[CLIENT] ERROR: DID NOT GET - ${error}`));
 
-//  ----- Change the request data to test the paths and methods
-const requestData = { method: "post", path: "event", data: {
-  name: "Evento legal",
-  type: "show",
-  local: "barramas",
-  ticketPrice: 45.6,
-  date: "34-23-6543"
-} };
+  return promise;
+};
 
-ticketServiceTest(requestData);
+const startRouteTests = () => {
+  testAllEventRoutes(ticketServiceTest).catch((error) => console.error(error));
+  testAllOrderRoutes(ticketServiceTest).catch((error) => console.error(error));
+};
 
+startRouteTests();
 
 const clientServiceTest = async () => {
   try {
