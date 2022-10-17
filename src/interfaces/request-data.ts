@@ -1,4 +1,4 @@
 export interface RequestData {
-    method: "post" | "delete" | "get" | "update",  // TODO: get by id or get all?
+    method: "post" | "delete" | "get" | "getAll" | "update",  
     body?: Object
 }

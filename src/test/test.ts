@@ -5,11 +5,8 @@ import { testAllOrderRoutes } from "./order-routes";
 
 const ticketServiceTest = async (requestData: any): Promise<any> => {
   const [resolve, reject, promise] = createPromise();
-
-  console.info("[TEST] Creating client...");
   const clientConstroller = await Controller.create();
 
-  console.info("[TEST] Making request to service...");
   clientConstroller
     .request("ticketService", requestData)
     .then((data: Object) => resolve(data))

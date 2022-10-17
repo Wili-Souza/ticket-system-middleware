@@ -5,7 +5,6 @@ import { ControllerI } from "./interfaces/controller";
 import { DNS_ADDRESS, DNS_PORT, SPLITTER } from "./config";
 import { createPromise } from "./helpers/promise";
 import { ClientPromise } from "./interfaces/client-promise";
-import { RequestData } from "./interfaces/request-data";
 import ServiceConnection from "./helpers/service-connection";
 
 export default class Controller implements ControllerI {
@@ -26,7 +25,6 @@ export default class Controller implements ControllerI {
     this.setOnDataEvent();
   }
 
-  // Returns a promise for controller
   static async create(options?: {
     keepAlive?: boolean;
     keepAliveInterval?: number;
@@ -52,7 +50,7 @@ export default class Controller implements ControllerI {
         options?.keepAlive || false,
         options?.keepAliveInterval || 10
       );
-      console.info("[MIDDLEWARE] INFO: connected on address: " + fullAddress);
+      // console.info("[MIDDLEWARE] INFO: connected on address: " + fullAddress);
       resolve(controller);
     });
 
@@ -107,15 +105,10 @@ export default class Controller implements ControllerI {
     });
   }
 
-  // private findPromiseById(id: string): ClientPromise  {
-  //   Object.keys(this.promises).find( requestId => requestId === id);
-  // }
-
   private setOnDataEvent() {
     const stream = this.client.pipe(split());
 
     stream.on("data", (res: string) => {
-      // TODO: replace 'data' with address in name server
       const { id, serviceAddress, message } = JSON.parse(res);
       const promise = this.promises[id];
 
@@ -132,11 +125,11 @@ export default class Controller implements ControllerI {
 
       if (serviceAddress) {
         const [ADDRESS, PORT] = serviceAddress.split(":");
-        console.log(
-          "[MIDDLEWARE] got address from name server: ",
-          ADDRESS,
-          PORT
-        );
+        // console.log(
+        //   "[MIDDLEWARE] got address from name server: ",
+        //   ADDRESS,
+        //   PORT
+        // );
 
         ServiceConnection.create(ADDRESS, PORT)
           .then(async (connection) => {
