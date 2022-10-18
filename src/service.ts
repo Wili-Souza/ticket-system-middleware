@@ -32,7 +32,7 @@ export default class Service {
         console.info("[SERVICE] - Service closed.");
       });
 
-      console.log(`[SERVICE] - Server listening on port ${port}`)
+      console.log(`[SERVICE] - Server listening on port ${serverPort}`)
 
       const service = new Service(server);
       resolve(service);
