@@ -3,6 +3,7 @@ import split from "split";
 import { SPLITTER } from "./config";
 import { createPromise } from "./helpers/promise";
 import Controller from "./controller";
+import { cleanupServer } from "./helpers/cleanup";
 
 export default class Service {
   private readonly server;
@@ -14,6 +15,7 @@ export default class Service {
   static create(port: number = 8080, serviceName: string): Promise<Service> {
     const [resolve, reject, promise] = createPromise();
     const server = net.createServer();
+    cleanupServer(server);
 
     server.listen(port, async () => {
       const dnsConnection = await Service.registerService(serviceName, port);
@@ -27,6 +29,8 @@ export default class Service {
         dnsConnection.remove();
         console.info("[SERVICE] - Service closed.");
       });
+
+      console.log(`[SERVICE] - Server listening on port ${port}`)
 
       const service = new Service(server);
       resolve(service);
