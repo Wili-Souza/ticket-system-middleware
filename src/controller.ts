@@ -44,6 +44,7 @@ export default class Controller implements ControllerI {
         );
       }
       const fullAddress = `${address}:${options?.port || port}`;
+      
       const controller: Controller = new Controller(
         fullAddress,
         client,

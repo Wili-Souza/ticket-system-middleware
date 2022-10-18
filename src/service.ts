@@ -1,4 +1,4 @@
-import net from "net";
+import net, { AddressInfo } from "net";
 import split from "split";
 import { SPLITTER } from "./config";
 import { createPromise } from "./helpers/promise";
@@ -18,7 +18,9 @@ export default class Service {
     cleanupServer(server);
 
     server.listen(port, async () => {
-      const dnsConnection = await Service.registerService(serviceName, port);
+      const serverPort = port || (server.address() as AddressInfo).port;
+
+      const dnsConnection = await Service.registerService(serviceName, serverPort);
       if (!dnsConnection) {
         server.close();
         reject("[SERVICE] Error: Failed to register service in name server.");
