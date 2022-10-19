@@ -149,7 +149,7 @@ export default class Controller implements ControllerI {
     });
   }
 
-  send(messageData: Object, requestData?: Object): Promise<Object | string> {
+  private send(messageData: Object, requestData?: Object): Promise<Object | string> {
     const [resolve, reject, promise] = createPromise();
 
     if (!this.alive) {
