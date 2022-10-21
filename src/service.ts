@@ -12,15 +12,21 @@ export default class Service {
     this.server = serverConnection;
   }
 
-  static create(port: number = 8080, serviceName: string): Promise<Service> {
+
+  static create(customPort: number, serviceName: string): Promise<Service> {
     const [resolve, reject, promise] = createPromise();
     const server = net.createServer();
     cleanupServer(server);
+    
 
-    server.listen(port, async () => {
-      const serverPort = port || (server.address() as AddressInfo).port;
+    server.listen(customPort, async () => {
+      const { port } = server.address() as AddressInfo;
+      const serverPort = customPort || port;
 
-      const dnsConnection = await Service.registerService(serviceName, serverPort);
+      const dnsConnection = await Service.registerService(
+        serviceName,
+        serverPort
+      );
       if (!dnsConnection) {
         server.close();
         reject("[SERVICE] Error: Failed to register service in name server.");
@@ -32,7 +38,7 @@ export default class Service {
         console.info("[SERVICE] - Service closed.");
       });
 
-      console.log(`[SERVICE] - Server listening on port ${serverPort}`)
+      console.log(`[SERVICE] - Server listening on port ${serverPort}`);
 
       const service = new Service(server);
       resolve(service);
@@ -66,7 +72,7 @@ export default class Service {
 
       stream.on("data", (clientData) => {
         console.log(client.readable);
-        
+
         if (!client.readable) {
           return;
         }
