@@ -8,9 +8,7 @@ import NameServerConnection from "./connections/name-server-connection";
 export default class Service {
   private readonly server;
 
-  private constructor(
-    serverConnection: net.Server
-  ) {
+  private constructor(serverConnection: net.Server) {
     this.server = serverConnection;
   }
 
@@ -25,7 +23,7 @@ export default class Service {
 
       console.log(`[SERVICE] - Server listening on port ${serverPort}`);
 
-      NameServerConnection.create(customPort)
+      NameServerConnection.create(serverPort)
         .then((nameServerConnection) => {
           try {
             nameServerConnection.register(serviceName);

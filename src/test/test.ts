@@ -17,7 +17,7 @@ const ticketServiceTest = async (requestData: any): Promise<any> => {
 
 const startRouteTests = () => {
   testAllEventRoutes(ticketServiceTest).catch((error) => console.error(error));
-  testAllOrderRoutes(ticketServiceTest).catch((error) => console.error(error));
+  // testAllOrderRoutes(ticketServiceTest).catch((error) => console.error(error));
 };
 
 startRouteTests();
