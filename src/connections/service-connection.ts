@@ -22,12 +22,12 @@ export default class ServiceConnection {
 
     try {
       client.on("error", (error: any) => {
-        console.error("[MIDDLEWARE -> SERVICE] ERROR: " + error.message);
+        console.error("[Service connection] ERROR: " + error.message);
         client.destroy();
       });
 
       client.on("close", () => {
-        console.info("[MIDDLEWARE -> SERVICE] INFO: connection closed.");
+        console.info("[Service connectio] INFO: connection closed.");
       });
 
       client.connect(PORT, ADDRESS, () => {

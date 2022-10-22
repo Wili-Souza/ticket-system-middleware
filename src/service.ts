@@ -5,6 +5,8 @@ import { createPromise } from "./helpers/promise";
 import { cleanupServer } from "./helpers/cleanup";
 import NameServerConnection from "./connections/name-server-connection";
 
+const STANDBY_KEY = "Standby";
+
 export default class Service {
   private readonly server;
 
@@ -12,17 +14,22 @@ export default class Service {
     this.server = serverConnection;
   }
 
-  static create(customPort: number, serviceName: string): Promise<Service> {
+  static create(
+    name: string,
+    options: {
+      customPort: number;
+      isStandby?: boolean;
+    }
+  ): Promise<Service> {
     const [resolve, reject, promise] = createPromise();
     const server = net.createServer();
     cleanupServer(server);
 
-    server.listen(customPort, async () => {
+    server.listen(options.customPort, async () => {
       const { port } = server.address() as AddressInfo;
-      const serverPort = customPort || port;
+      const serverPort = options.customPort || port;
 
-      console.log(`[SERVICE] - Server listening on port ${serverPort}`);
-
+      const serviceName = options.isStandby ? name + STANDBY_KEY : name;
       NameServerConnection.create(serverPort)
         .then((nameServerConnection) => {
           try {
@@ -40,6 +47,8 @@ export default class Service {
           });
 
           const service = new Service(server);
+
+          console.log(`[SERVICE] - Server listening on port ${serverPort}`);
           resolve(service);
         })
         .catch((error) => reject(error));

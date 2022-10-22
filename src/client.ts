@@ -2,13 +2,14 @@ import { ClientI } from "./interfaces/client";
 import { createPromise } from "./helpers/promise";
 import ServiceConnection from "./connections/service-connection";
 import NameServerConnection from "./connections/name-server-connection";
+import { sleep } from "./helpers/sleep";
+
+const REQUEST_MAX_ATTEMPTS = 3;
 
 export default class Client implements ClientI {
   private readonly nameServerConnection: NameServerConnection;
 
-  private constructor(
-    nameServerConnection: NameServerConnection
-  ) {
+  private constructor(nameServerConnection: NameServerConnection) {
     this.nameServerConnection = nameServerConnection;
   }
 
@@ -29,32 +30,54 @@ export default class Client implements ClientI {
 
   request(serviceName: string, data: Object): Promise<Object> {
     const [resolve, reject, promise] = createPromise();
+    const request = {
+      serviceName,
+      data,
+      attempts: 0,
+    };
+
+    this.tryRequest(request, REQUEST_MAX_ATTEMPTS)
+      .then((serviceResponse) => resolve(serviceResponse))
+      .catch((error) => reject(error));
+
+    return promise;
+  }
+
+  async tryRequest(
+    request: { serviceName: string; data: Object; attempts: number },
+    maxAttempts: number
+  ) {
+    const [resolve, reject, promise] = createPromise();
+    request.attempts++;
+
+    // await sleep(7000);
 
     this.nameServerConnection
-      .request(serviceName)
+      .request(request.serviceName)
       .then((serviceAddress) => {
-        if (serviceAddress && !data) {
+        if (!request.data) {
           reject("No requestData provided to service request.");
           return;
         }
-
-        if (serviceAddress) {
-          const [ADDRESS, PORT] = serviceAddress.split(":");
-          ServiceConnection.create(ADDRESS, Number(PORT))
-            .then(async (connection) => {
-              const serviceResponse = await connection.makeRequest(data);
-              connection.finish();
-              resolve(serviceResponse);
-            })
-            .catch(() => {
-              reject("Service connection failed.");
-            });
-          return;
-        }
+        const [ADDRESS, PORT] = serviceAddress.split(":");
+        ServiceConnection.create(ADDRESS, Number(PORT))
+          .then(async (connection) => {
+            const serviceResponse = await connection.makeRequest(request.data);
+            connection.finish();
+            resolve(serviceResponse);
+          })
+          .catch((error) => {
+            reject(error);
+          });
+        return;
       })
-      .catch(() =>
-        reject(`Service address not found by the name server.`)
-      );
+      .catch(() => {
+        if (maxAttempts <= request.attempts) {
+          reject(`Service address not found by the name server.`);
+        } else {
+          resolve(this.tryRequest(request, maxAttempts));
+        }
+      });
 
     return promise;
   }

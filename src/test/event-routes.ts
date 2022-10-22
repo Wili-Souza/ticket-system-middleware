@@ -66,14 +66,19 @@ export const testAllEventRoutes = async (
   const allMethods = [...METHODS, ...DEPENDENCY_METHODS()];
 
   allMethods.forEach(async (data, index) => {
-    const result = await ticketServiceTest(data);
-    const method = data.method.toUpperCase();
-    const valid = validate(result, method);
-    if (!valid) {
-      reject(result);
-    }
-    if (index + 1 === allMethods.length) {
-      resolve("success");
+    try {
+      const result = await ticketServiceTest(data);
+      const method = data.method.toUpperCase();
+      const valid = validate(result, method);
+      if (!valid) {
+        reject(result);
+        return;
+      }
+      if (index + 1 === allMethods.length) {
+        resolve("success");
+      }
+    } catch (error) {
+      reject(error);
     }
   });
 

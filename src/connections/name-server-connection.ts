@@ -90,7 +90,7 @@ export default class NameServerConnection {
     const stream = this.socket.pipe(split());
 
     stream.on("data", (res: string) => {
-      const { id, serviceAddress, message } = JSON.parse(res);
+      const { id, serviceAddress, message, status } = JSON.parse(res);
       const promise = this.promises[id];
 
       if (!promise) {
@@ -99,10 +99,14 @@ export default class NameServerConnection {
 
       const { resolve, reject } = this.promises[id];
 
+      if ( status === "error" ) {
+        reject(message);
+        return;
+      }
+
       if (!serviceAddress && !message) {
         reject("Communication failed.")
-      } else {
-        resolve(serviceAddress || message)
+        return
       }
 
       resolve(serviceAddress || message);
