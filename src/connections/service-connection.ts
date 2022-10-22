@@ -2,7 +2,7 @@ import { Socket } from "net";
 import split from "split";
 import { SPLITTER } from "../config";
 import { PromiseMethod } from "../types/promise-handler";
-import { createPromise } from "./promise";
+import { createPromise } from "../helpers/promise";
 
 export default class ServiceConnection {
   private readonly client: Socket;

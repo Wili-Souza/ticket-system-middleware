@@ -2,46 +2,49 @@ import net, { AddressInfo } from "net";
 import split from "split";
 import { SPLITTER } from "./config";
 import { createPromise } from "./helpers/promise";
-import Controller from "./controller";
 import { cleanupServer } from "./helpers/cleanup";
+import NameServerConnection from "./connections/name-server-connection";
 
 export default class Service {
   private readonly server;
 
-  private constructor(serverConnection: net.Server) {
+  private constructor(
+    serverConnection: net.Server
+  ) {
     this.server = serverConnection;
   }
-
 
   static create(customPort: number, serviceName: string): Promise<Service> {
     const [resolve, reject, promise] = createPromise();
     const server = net.createServer();
     cleanupServer(server);
-    
 
     server.listen(customPort, async () => {
       const { port } = server.address() as AddressInfo;
       const serverPort = customPort || port;
 
-      const dnsConnection = await Service.registerService(
-        serviceName,
-        serverPort
-      );
-      if (!dnsConnection) {
-        server.close();
-        reject("[SERVICE] Error: Failed to register service in name server.");
-        return;
-      }
-
-      server.on("close", () => {
-        dnsConnection.remove();
-        console.info("[SERVICE] - Service closed.");
-      });
-
       console.log(`[SERVICE] - Server listening on port ${serverPort}`);
 
-      const service = new Service(server);
-      resolve(service);
+      NameServerConnection.create(customPort)
+        .then((nameServerConnection) => {
+          try {
+            nameServerConnection.register(serviceName);
+          } catch {
+            reject(
+              "[SERVICE] Error: Failed to register service in name server."
+            );
+            return;
+          }
+
+          server.on("close", () => {
+            nameServerConnection.remove();
+            console.info("[SERVICE] - Service closed.");
+          });
+
+          const service = new Service(server);
+          resolve(service);
+        })
+        .catch((error) => reject(error));
     });
 
     server.on("error", (error) => {
@@ -51,28 +54,11 @@ export default class Service {
     return promise;
   }
 
-  private static async registerService(
-    serviceName: string,
-    port: number
-  ): Promise<Controller | undefined> {
-    try {
-      const nameServerConnection = await Controller.create({
-        port: port,
-      });
-      await nameServerConnection.register(serviceName);
-      return nameServerConnection;
-    } catch {
-      return;
-    }
-  }
-
   setOnData(onDataFunction: (data: Object) => any) {
     this.server.on("connection", (client) => {
       const stream = client.pipe(split());
 
       stream.on("data", (clientData) => {
-        console.log(client.readable);
-
         if (!client.readable) {
           return;
         }
@@ -91,29 +77,3 @@ export default class Service {
     });
   }
 }
-
-/*
-  - To create a Service Server, use the static method:
-      ServiceServer.create(port: number, serviceName: string)
-      e.g.:
-      const service = ServiceServer.create(5001, "testService")
-    
-  
-  - To allow your server to receive requests, use the method
-      setOnData(
-        onDataFunction: (data: Object) => any       --> function called for every request
-      )
-      the function must return a value that will be sent as response to the client
-      e.g.:
-      const service = ServiceServer.create(5001, "testService")
-      service.setOnData(data: Object): Object => {
-        * checking and processing * 
-        return {status: "sucess", forService: "testService"};
-      })
-*/
-
-// ServiceServer.create(5001, "testService").then((server) => {
-//   server.setOnData((data: Object): Object => {
-//     return {status: "sucess", forService: "testService"};
-//   });
-// });

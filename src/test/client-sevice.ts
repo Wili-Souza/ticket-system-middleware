@@ -1,4 +1,4 @@
-import Controller from "../controller";
+import Client from "../client";
 import Service from "../service";
 
 const TEST_SERVICE_PORT = 5080;
@@ -13,7 +13,7 @@ export const clientServiceTest = async () => {
       });
       
       console.info("[TEST] Creating client...");
-      const clientConstroller = await Controller.create();
+      const clientConstroller = await Client.create();
   
       console.info("[TEST] Making request to service...");
       const requestData = { method: "get" };

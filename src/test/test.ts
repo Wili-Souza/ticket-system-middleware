@@ -1,11 +1,11 @@
-import Controller from "../controller";
+import Client from "../client";
 import { createPromise } from "../helpers/promise";
 import { testAllEventRoutes } from "./event-routes";
 import { testAllOrderRoutes } from "./order-routes";
 
 const ticketServiceTest = async (requestData: any): Promise<any> => {
   const [resolve, reject, promise] = createPromise();
-  const clientConstroller = await Controller.create();
+  const clientConstroller = await Client.create();
 
   clientConstroller
     .request("ticketService", requestData)
