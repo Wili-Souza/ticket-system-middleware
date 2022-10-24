@@ -16,8 +16,8 @@ export default class Service {
   private readonly server: net.Server;
   private readonly dataControl: {
     sync: boolean;
-    dataLists: {[key: string]: any[]};
-    oldDataLists: {[key: string]: any[]};
+    dataLists: { [key: string]: any[] };
+    oldDataLists: { [key: string]: any[] };
   } = {
     sync: false,
     dataLists: {},
@@ -64,8 +64,9 @@ export default class Service {
             return;
           }
 
-          server.on("close", () => {
-            nameServerConnection.remove();
+          server.on("close", async () => {
+            console.log("removing...");
+            await nameServerConnection.remove();
             console.info("[SERVICE] - Service closed.");
           });
 
@@ -89,11 +90,11 @@ export default class Service {
     return promise;
   }
 
-  activateDataSync(dataLists: {[key: string]: any[]}): void {
+  activateDataSync(dataLists: { [key: string]: any[] }): void {
     if (Object.keys(dataLists).length <= 0) {
       return;
     }
-    this.dataControl.oldDataLists = {...dataLists};
+    this.dataControl.oldDataLists = { ...dataLists };
     this.dataControl.dataLists = dataLists;
     this.dataControl.sync = true;
   }
@@ -107,7 +108,10 @@ export default class Service {
           return;
         }
 
-        let dataObj: { path?: string } = {};
+        let dataObj: {
+          method?: string;
+          path?: string;
+        } = {};
         try {
           dataObj = JSON.parse(clientData as string);
         } catch {
@@ -115,23 +119,40 @@ export default class Service {
         }
 
         const result = onDataFunction(dataObj);
-        this.checkAndSendSyncData(dataObj.path);
+        this.checkAndSendSyncData(dataObj);
         const resultMessage = JSON.stringify(result);
         client.write(resultMessage + SPLITTER);
       });
     });
   }
 
-  private checkAndSendSyncData(path?: string): void {
+  private checkAndSendSyncData({
+    path,
+    method,
+  }: {
+    path?: string;
+    method?: string;
+  }): void {
     if (
-      !path ||
       !this.dataControl.sync ||
+      !path ||
+      method === "syncData" ||
       this.dataControl.dataLists === this.dataControl.oldDataLists
     ) {
-      console.log("Not sending sync.")
+      console.log(
+        "Not sending sync.",
+        path,
+        this.dataControl.sync,
+        this.dataControl.dataLists === this.dataControl.oldDataLists
+      );
       return;
     }
-    console.log("Sending sync...")
+    console.log(
+      "Sending sync.",
+      path,
+      this.dataControl.sync,
+      this.dataControl.dataLists === this.dataControl.oldDataLists
+    );
     this.dataControl.oldDataLists = this.dataControl.dataLists;
 
     const serviceName = this.name.endsWith("Standby")
@@ -157,8 +178,7 @@ export default class Service {
   private sendSyncDataToService(serviceAddress: string, path: string): void {
     const [address, port] = serviceAddress.split(":");
     ServiceConnection.create(address, Number(port))
-    .then(
-      (serviceConnection) => {
+      .then((serviceConnection) => {
         serviceConnection.makeRequest({
           method: "syncData",
           path,
@@ -166,10 +186,9 @@ export default class Service {
             dataList: this.dataControl.dataLists[path],
           },
         });
-      }
-    )
-    .catch(error => {
-      console.log("[SERVICE] Sync communication error: ", error);
-    });
+      })
+      .catch((error) => {
+        console.log("[SERVICE] Sync communication error: ", error);
+      });
   }
 }

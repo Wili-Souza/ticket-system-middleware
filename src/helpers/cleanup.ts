@@ -1,28 +1,32 @@
 import { Server } from "net";
 
 const EXIT_EVENTS = [
+  "SIGHUP",
   "SIGINT",
+  "SIGQUIT",
+  "SIGILL",
+  "SIGTRAP",
+  "SIGABRT",
+  "SIGBUS",
+  "SIGFPE",
   "SIGUSR1",
+  "SIGSEGV",
   "SIGUSR2",
-  "uncaughtException",
   "SIGTERM",
 ];
 
 export function cleanupServer(server: Server) {
   EXIT_EVENTS.forEach((event) => {
-    process.on("exit", () => {});
-
-    EXIT_EVENTS.forEach(() => {
-      process.on(event, () => {
-        terminator(event, server);
-      });
+    process.once(event, () => {
+      terminator(event, server);
     });
   });
 }
 
 function terminator(event: string, server: Server) {
   if (typeof event === "string") {
-    server.close(() => {
+    server.close((error) => {
+      process.openStdin().removeAllListeners();
       process.exit();
     });
   }
