@@ -47,7 +47,15 @@ export default class NameServerConnection {
       operation: "get",
       serviceName: serviceName,
     };
-    return this.send(dnsGetData);
+    return this.send(dnsGetData) as Promise<string>;
+  }
+
+  requestAll(servicesNames: string[]): Promise<string[]> {
+    const dnsGetAllData = {
+      operation: "getAll",
+      servicesNames: servicesNames
+    };
+    return this.send(dnsGetAllData) as Promise<string[]>;
   }
 
   remove(): Promise<string> {
@@ -55,7 +63,7 @@ export default class NameServerConnection {
       operation: "delete",
       serviceAddress: this.address,
     };
-    return this.send(dnsRemoveData);
+    return this.send(dnsRemoveData) as Promise<string>;
   }
 
   register(serviceName: string): Promise<string> {
@@ -66,7 +74,7 @@ export default class NameServerConnection {
         name: serviceName,
       },
     };
-    return this.send(dnsRegisterData);
+    return this.send(dnsRegisterData) as Promise<string>;
   }
 
   private static initClientBasicEvents(socket: net.Socket) {
@@ -114,7 +122,7 @@ export default class NameServerConnection {
     });
   }
 
-  send(messageData: Object): Promise<string> {
+  send(messageData: Object): Promise<string | string[]> {
     const [resolve, reject, promise] = createPromise();
     try {
       // TODO: set timeout to get response [reject(error)]

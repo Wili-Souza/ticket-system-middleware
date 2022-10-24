@@ -4,14 +4,36 @@ import { SPLITTER } from "./config";
 import { createPromise } from "./helpers/promise";
 import { cleanupServer } from "./helpers/cleanup";
 import NameServerConnection from "./connections/name-server-connection";
+import ServiceConnection from "./connections/service-connection";
+import ip from "ip";
 
 const STANDBY_KEY = "Standby";
 
 export default class Service {
-  private readonly server;
+  private nameServerConnection: NameServerConnection;
+  readonly name: string;
+  readonly address: string;
+  private readonly server: net.Server;
+  private readonly dataControl: {
+    sync: boolean;
+    dataLists: {[key: string]: any[]};
+    oldDataLists: {[key: string]: any[]};
+  } = {
+    sync: false,
+    dataLists: {},
+    oldDataLists: {},
+  };
 
-  private constructor(serverConnection: net.Server) {
+  private constructor(
+    name: string,
+    address: string,
+    serverConnection: net.Server,
+    nameServerConnection: NameServerConnection
+  ) {
+    this.name = name;
+    this.address = address;
     this.server = serverConnection;
+    this.nameServerConnection = nameServerConnection;
   }
 
   static create(
@@ -28,6 +50,7 @@ export default class Service {
     server.listen(options.customPort, async () => {
       const { port } = server.address() as AddressInfo;
       const serverPort = options.customPort || port;
+      const serverAddress = `${ip.address()}:${port}`;
 
       const serviceName = options.isStandby ? name + STANDBY_KEY : name;
       NameServerConnection.create(serverPort)
@@ -46,7 +69,12 @@ export default class Service {
             console.info("[SERVICE] - Service closed.");
           });
 
-          const service = new Service(server);
+          const service = new Service(
+            name,
+            serverAddress,
+            server,
+            nameServerConnection
+          );
 
           console.log(`[SERVICE] - Server listening on port ${serverPort}`);
           resolve(service);
@@ -61,6 +89,15 @@ export default class Service {
     return promise;
   }
 
+  activateDataSync(dataLists: {[key: string]: any[]}): void {
+    if (Object.keys(dataLists).length <= 0) {
+      return;
+    }
+    this.dataControl.oldDataLists = {...dataLists};
+    this.dataControl.dataLists = dataLists;
+    this.dataControl.sync = true;
+  }
+
   setOnData(onDataFunction: (data: Object) => any) {
     this.server.on("connection", (client) => {
       const stream = client.pipe(split());
@@ -70,7 +107,7 @@ export default class Service {
           return;
         }
 
-        let dataObj = {};
+        let dataObj: { path?: string } = {};
         try {
           dataObj = JSON.parse(clientData as string);
         } catch {
@@ -78,9 +115,61 @@ export default class Service {
         }
 
         const result = onDataFunction(dataObj);
+        this.checkAndSendSyncData(dataObj.path);
         const resultMessage = JSON.stringify(result);
         client.write(resultMessage + SPLITTER);
       });
+    });
+  }
+
+  private checkAndSendSyncData(path?: string): void {
+    if (
+      !path ||
+      !this.dataControl.sync ||
+      this.dataControl.dataLists === this.dataControl.oldDataLists
+    ) {
+      console.log("Not sending sync.")
+      return;
+    }
+    console.log("Sending sync...")
+    this.dataControl.oldDataLists = this.dataControl.dataLists;
+
+    const serviceName = this.name.endsWith("Standby")
+      ? this.name.replace("Standby", "")
+      : this.name;
+    const serviceNames = [serviceName, serviceName + STANDBY_KEY];
+
+    this.nameServerConnection
+      .requestAll(serviceNames)
+      .then((servicesAddresses) => {
+        const addresses = servicesAddresses.filter((add) => {
+          return add !== this.address;
+        });
+        addresses.forEach((serviceAddress) => {
+          this.sendSyncDataToService(serviceAddress, path);
+        });
+      })
+      .catch((error) => {
+        console.log("[SERVICE] Sync error: ", error);
+      });
+  }
+
+  private sendSyncDataToService(serviceAddress: string, path: string): void {
+    const [address, port] = serviceAddress.split(":");
+    ServiceConnection.create(address, Number(port))
+    .then(
+      (serviceConnection) => {
+        serviceConnection.makeRequest({
+          method: "syncData",
+          path,
+          data: {
+            dataList: this.dataControl.dataLists[path],
+          },
+        });
+      }
+    )
+    .catch(error => {
+      console.log("[SERVICE] Sync communication error: ", error);
     });
   }
 }
