@@ -1,6 +1,6 @@
 import net, { AddressInfo } from "net";
 import split from "split";
-import { SPLITTER } from "./config";
+import { SPLITTER, SYNC_DATA_METHOD } from "./config";
 import { createPromise } from "./helpers/promise";
 import { cleanupServer } from "./helpers/cleanup";
 import NameServerConnection from "./connections/name-server-connection";
@@ -65,7 +65,6 @@ export default class Service {
           }
 
           server.on("close", async () => {
-            console.log("removing...");
             await nameServerConnection.remove();
             console.info("[SERVICE] - Service closed.");
           });
@@ -118,6 +117,15 @@ export default class Service {
           return;
         }
 
+        if (dataObj.method === SYNC_DATA_METHOD && !this.dataControl.sync) {
+          const resultMessage = JSON.stringify({
+            status: "error",
+            data: "This server do not accept data"
+          });
+          client.write(resultMessage + SPLITTER);
+          return;
+        }
+
         const result = onDataFunction(dataObj);
         this.checkAndSendSyncData(dataObj);
         const resultMessage = JSON.stringify(result);
@@ -136,23 +144,11 @@ export default class Service {
     if (
       !this.dataControl.sync ||
       !path ||
-      method === "syncData" ||
+      method === SYNC_DATA_METHOD ||
       this.dataControl.dataLists === this.dataControl.oldDataLists
     ) {
-      console.log(
-        "Not sending sync.",
-        path,
-        this.dataControl.sync,
-        this.dataControl.dataLists === this.dataControl.oldDataLists
-      );
       return;
     }
-    console.log(
-      "Sending sync.",
-      path,
-      this.dataControl.sync,
-      this.dataControl.dataLists === this.dataControl.oldDataLists
-    );
     this.dataControl.oldDataLists = this.dataControl.dataLists;
 
     const serviceName = this.name.endsWith("Standby")
@@ -180,7 +176,7 @@ export default class Service {
     ServiceConnection.create(address, Number(port))
       .then((serviceConnection) => {
         serviceConnection.makeRequest({
-          method: "syncData",
+          method: SYNC_DATA_METHOD,
           path,
           data: {
             dataList: this.dataControl.dataLists[path],
