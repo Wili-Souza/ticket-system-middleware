@@ -151,10 +151,11 @@ export default class Service {
     }
     this.dataControl.oldDataLists = this.dataControl.dataLists;
 
-    const serviceName = this.name.endsWith("Standby")
-      ? this.name.replace("Standby", "")
+    const serviceName = this.name.endsWith(STANDBY_KEY)
+      ? this.name.replace(STANDBY_KEY, "")
       : this.name;
     const serviceNames = [serviceName, serviceName + STANDBY_KEY];
+    console.log(serviceNames, this.address);
 
     this.nameServerConnection
       .requestAll(serviceNames)
@@ -175,13 +176,16 @@ export default class Service {
     const [address, port] = serviceAddress.split(":");
     ServiceConnection.create(address, Number(port))
       .then((serviceConnection) => {
-        serviceConnection.makeRequest({
-          method: SYNC_DATA_METHOD,
-          path,
-          data: {
-            dataList: this.dataControl.dataLists[path],
-          },
-        });
+        serviceConnection
+          .makeRequest({
+            method: SYNC_DATA_METHOD,
+            path,
+            data: {
+              dataList: this.dataControl.dataLists[path],
+            },
+          })
+          ?.then(() => serviceConnection.finish())
+          .catch(() => serviceConnection.finish());
       })
       .catch((error) => {
         console.log("[SERVICE] Sync communication error: ", error);

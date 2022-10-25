@@ -16,6 +16,8 @@ const EXIT_EVENTS = [
 ];
 
 export function cleanupServer(server: Server) {
+  process.on("exit", () => {});
+  
   EXIT_EVENTS.forEach((event) => {
     process.once(event, () => {
       terminator(event, server);
