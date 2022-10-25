@@ -6,7 +6,6 @@ import { cleanupServer } from "./helpers/cleanup";
 import NameServerConnection from "./connections/name-server-connection";
 import ServiceConnection from "./connections/service-connection";
 import ip from "ip";
-import _ from "underscore";
 
 const STANDBY_KEY = "Standby";
 
