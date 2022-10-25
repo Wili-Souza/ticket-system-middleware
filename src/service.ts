@@ -1,11 +1,12 @@
 import net, { AddressInfo } from "net";
 import split from "split";
-import { SPLITTER, SYNC_DATA_METHOD } from "./config";
+import { CHANGE_DATA_METHODS, SPLITTER, SYNC_DATA_METHOD } from "./config";
 import { createPromise } from "./helpers/promise";
 import { cleanupServer } from "./helpers/cleanup";
 import NameServerConnection from "./connections/name-server-connection";
 import ServiceConnection from "./connections/service-connection";
 import ip from "ip";
+import _ from "underscore";
 
 const STANDBY_KEY = "Standby";
 
@@ -17,11 +18,9 @@ export default class Service {
   private readonly dataControl: {
     sync: boolean;
     dataLists: { [key: string]: any[] };
-    oldDataLists: { [key: string]: any[] };
   } = {
     sync: false,
-    dataLists: {},
-    oldDataLists: {},
+    dataLists: {}
   };
 
   private constructor(
@@ -93,7 +92,6 @@ export default class Service {
     if (Object.keys(dataLists).length <= 0) {
       return;
     }
-    this.dataControl.oldDataLists = { ...dataLists };
     this.dataControl.dataLists = dataLists;
     this.dataControl.sync = true;
   }
@@ -118,44 +116,55 @@ export default class Service {
         }
 
         if (dataObj.method === SYNC_DATA_METHOD && !this.dataControl.sync) {
+          console.log("--- IS NOT ABLE TO SYNC");
+          
           const resultMessage = JSON.stringify({
             status: "error",
-            data: "This server do not accept data"
+            data: "This server do not accept data",
           });
           client.write(resultMessage + SPLITTER);
           return;
         }
 
         const result = onDataFunction(dataObj);
-        this.checkAndSendSyncData(dataObj);
+
+        if (this.dataControl.sync) {
+          const shouldSendSync = this.checkIfSyncIsNeeded(dataObj);
+          if (shouldSendSync) {
+            console.log("--- SENDING SIGNAL | ", dataObj.method);
+            this.SendSyncData(dataObj.path!);
+          }
+        }
+        
         const resultMessage = JSON.stringify(result);
         client.write(resultMessage + SPLITTER);
       });
     });
   }
 
-  private checkAndSendSyncData({
+  private checkIfSyncIsNeeded({
     path,
     method,
   }: {
     path?: string;
     method?: string;
-  }): void {
+  }): boolean {
     if (
-      !this.dataControl.sync ||
-      !path ||
-      method === SYNC_DATA_METHOD ||
-      this.dataControl.dataLists === this.dataControl.oldDataLists
+      this.dataControl.sync &&
+      path &&
+      method &&
+      CHANGE_DATA_METHODS.includes(method)
     ) {
-      return;
+      return true;
     }
-    this.dataControl.oldDataLists = this.dataControl.dataLists;
+    return false;
+  }
 
+  private SendSyncData(path: string): void {
     const serviceName = this.name.endsWith(STANDBY_KEY)
       ? this.name.replace(STANDBY_KEY, "")
       : this.name;
     const serviceNames = [serviceName, serviceName + STANDBY_KEY];
-    console.log(serviceNames, this.address);
 
     this.nameServerConnection
       .requestAll(serviceNames)
