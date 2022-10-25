@@ -16,14 +16,16 @@ export default class NameServerConnection {
     this.setOnDataEvent();
   }
 
-  static async create(customPort?: number): Promise<NameServerConnection> {
+  static async create(customPort?: number, serviceName?: string): Promise<NameServerConnection> {
     const [resolve, reject, promise] = createPromise();
 
     const socket: net.Socket = new net.Socket();
 
     NameServerConnection.initClientBasicEvents(socket);
 
-    socket.connect(DNS_PORT, DNS_ADDRESS, () => {
+    socket.connect(DNS_PORT, DNS_ADDRESS);
+
+    socket.on("connect", () => {
       const { address, port } = socket.address() as AddressInfo;
       if (!address || (!customPort && !port)) {
         reject(
@@ -36,8 +38,12 @@ export default class NameServerConnection {
         socket
       );
 
+      if (serviceName) {
+        connection.register(serviceName);
+      }
+
       resolve(connection);
-    });
+    })
 
     return promise;
   }
@@ -79,10 +85,9 @@ export default class NameServerConnection {
 
   private static initClientBasicEvents(socket: net.Socket) {
     socket.on("error", (error: any) => {
-      // TODO: testar para confirmar lógica
-      if (error.code === "ECONNREFUSED") {
-        console.error("[DNS Connection] ERROR: DNS Server unavailable");
-        socket.destroy();
+      if (error.code === "ECONNREFUSED" || error.code === "ECONNRESET") {
+        console.error("[DNS Connection] ERROR: DNS Server unavailable. Retrying...");
+        socket.connect(DNS_PORT, DNS_ADDRESS);
       } else {
         console.error("[DNS Connection] ERROR: " + error.message);
         socket.destroy();

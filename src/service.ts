@@ -52,7 +52,7 @@ export default class Service {
       const serverAddress = `${ip.address()}:${port}`;
 
       const serviceName = options.isStandby ? name + STANDBY_KEY : name;
-      NameServerConnection.create(serverPort)
+      NameServerConnection.create(serverPort, serviceName)
         .then((nameServerConnection) => {
           try {
             nameServerConnection.register(serviceName);
